@@ -96,18 +96,30 @@ public class RenderPass {
                           .pAttachments(attachments)
                           .pSubpasses(subpass);
 
-            //Layout transition subpass depency
+            // Layout transitions and visibility dependencies.
+            // Some mobile Vulkan 1.1 drivers are more sensitive to missing/weak external
+            // dependencies when transitioning swapchain images to/from PRESENT.
             switch (colorAttachmentInfo.finalLayout) {
                 case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
-                    VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
-                    // Fixed: Added proper access masks for mobile GPU compatibility
+                    VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(2, stack);
+
+                    // External -> subpass: acquire visibility for color attachment writes.
                     subpassDependencies.get(0)
                                        .srcSubpass(VK_SUBPASS_EXTERNAL)
                                        .dstSubpass(0)
                                        .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
                                        .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
                                        .srcAccessMask(0)
-                                       .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+                                       .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+
+                    // Subpass -> external: make color attachment writes visible before present.
+                    subpassDependencies.get(1)
+                                       .srcSubpass(0)
+                                       .dstSubpass(VK_SUBPASS_EXTERNAL)
+                                       .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                       .dstStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
+                                       .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                                       .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT);
 
                     renderPassInfo.pDependencies(subpassDependencies);
                 }
