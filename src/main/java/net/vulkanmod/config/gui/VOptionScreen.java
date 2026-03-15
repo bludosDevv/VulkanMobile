@@ -280,36 +280,53 @@ public class VOptionScreen extends Screen {
     }
 
     private void renderShadersPanel() {
-        int panelX = this.tooltipX;
-        int panelY = this.tooltipY;
-        int panelWidth = this.tooltipWidth;
+        int panelHorizontalMargin = 24;
+        int panelTop = 48;
         int panelBottom = this.height - 36;
+        int panelWidth = Math.min(460, this.width - (panelHorizontalMargin * 2));
+        int panelX = (this.width - panelWidth) / 2;
 
         int bgColor = ColorUtil.ARGB.pack(0.08f, 0.08f, 0.08f, 0.75f);
-        GuiRenderer.fill(panelX, panelY, panelX + panelWidth, panelBottom, bgColor);
-        GuiRenderer.renderBorder(panelX, panelY, panelX + panelWidth, panelBottom, 1, RED);
+        GuiRenderer.fill(panelX, panelTop, panelX + panelWidth, panelBottom, bgColor);
+        GuiRenderer.renderBorder(panelX, panelTop, panelX + panelWidth, panelBottom, 1, RED);
 
-        int lineY = panelY + 6;
-        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.title"), panelX + 6, lineY, 0xFFFFFFFF);
-        lineY += 12;
+        int centerX = panelX + (panelWidth / 2);
+        int panelHeight = panelBottom - panelTop;
+        int lineSpacing = 14;
+        int sectionSpacing = 8;
+
+        int maxEntriesByPanel = Math.max(1, (panelHeight - 120) / lineSpacing);
+        int visibleEntries = this.shaderPackEntries.isEmpty()
+                ? 1
+                : Math.min(maxEntriesByPanel, this.shaderPackEntries.size());
+        int contentLines = 3 + visibleEntries;
+        int contentHeight = (contentLines * lineSpacing) + sectionSpacing;
+
+        int lineY = panelTop + Math.max(14, (panelHeight - contentHeight) / 2);
+
+        GuiRenderer.drawCenteredString(this.font, Component.translatable("vulkanmod.options.shaders.title"), centerX, lineY, 0xFFFFFFFF);
+        lineY += lineSpacing + 2;
 
         Path dir = ShaderPackManager.getShaderPacksDir();
-        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.path", dir.toString()), panelX + 6, lineY, 0xFFCCCCCC);
-        lineY += 12;
+        GuiRenderer.drawCenteredString(this.font, Component.translatable("vulkanmod.options.shaders.path", dir.toString()), centerX, lineY, 0xFFCCCCCC);
+        lineY += lineSpacing;
 
-        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.found", this.shaderPackEntries.size()), panelX + 6, lineY, 0xFFFFFFFF);
-        lineY += 14;
+        GuiRenderer.drawCenteredString(this.font, Component.translatable("vulkanmod.options.shaders.found", this.shaderPackEntries.size()), centerX, lineY, 0xFFFFFFFF);
+        lineY += lineSpacing + sectionSpacing;
 
         if (this.shaderPackEntries.isEmpty()) {
-            GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.empty"), panelX + 6, lineY, 0xFFAAAAAA);
+            GuiRenderer.drawCenteredString(this.font, Component.translatable("vulkanmod.options.shaders.empty"), centerX, lineY, 0xFFAAAAAA);
             return;
         }
 
-        int maxEntries = Math.max(1, (panelBottom - lineY - 6) / 10);
-        for (int i = 0; i < Math.min(maxEntries, this.shaderPackEntries.size()); ++i) {
+        for (int i = 0; i < visibleEntries; ++i) {
+            if (lineY > this.height - 20) {
+                break;
+            }
+
             String name = this.shaderPackEntries.get(i).getFileName().toString();
-            GuiRenderer.drawString(this.font, Component.literal("- " + name), panelX + 6, lineY, 0xFFFFFFFF);
-            lineY += 10;
+            GuiRenderer.drawCenteredString(this.font, Component.literal("- " + name), centerX, lineY, 0xFFFFFFFF);
+            lineY += lineSpacing;
         }
     }
 
