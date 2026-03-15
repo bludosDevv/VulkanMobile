@@ -581,7 +581,7 @@ public class VOptionScreen extends Screen {
             }
 
             @Override
-            public void renderContent(GuiGraphics guiGraphics, int index, int top, int left, int width, int height, int mouseX, int mouseY, boolean isHovered, float partialTick) {
+            public void renderWidget(GuiGraphics guiGraphics, int index, int top, int left, int width, int height, int mouseX, int mouseY, boolean isHovered, float partialTick) {
                 int bg = isHovered ? ColorUtil.ARGB.pack(0.3f, 0.0f, 0.0f, 0.30f) : ColorUtil.ARGB.pack(0.0f, 0.0f, 0.0f, 0.25f);
                 GuiRenderer.fill(left, top, left + width, top + height - 1, bg);
 
