@@ -369,7 +369,7 @@ public class VulkanImage {
 
         VkImageMemoryBarrier.Buffer barrier = VkImageMemoryBarrier.calloc(1, stack);
         barrier.sType(VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER);
-        barrier.oldLayout(image.currentLayout);
+        barrier.oldLayout(oldLayout);
         barrier.newLayout(newLayout);
         barrier.srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
         barrier.dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED);
