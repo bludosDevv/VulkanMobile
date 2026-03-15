@@ -347,7 +347,9 @@ public class VulkanImage {
                 destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
             }
             case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
-                destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+                // Mobile fix: Added proper access mask for presentation
+                dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+                destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             }
             default -> throw new RuntimeException("Unexpected value:" + newLayout);
         }

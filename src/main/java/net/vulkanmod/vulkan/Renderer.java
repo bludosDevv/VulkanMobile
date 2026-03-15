@@ -357,8 +357,9 @@ public class Renderer {
             int waitSemaphoreCount = waitSemaphores.limit();
             IntBuffer waitDstStageMask = stack.mallocInt(waitSemaphoreCount);
 
+            // Mobile fix: Use ALL_GRAPHICS_BITS instead of TOP_OF_PIPE for better synchronization
             for (int i = 0; i < waitSemaphoreCount - 1; i++) {
-                waitDstStageMask.put(i, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+                waitDstStageMask.put(i, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT);
             }
             // Image available semaphore mask
             waitDstStageMask.put(waitSemaphoreCount - 1, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT);

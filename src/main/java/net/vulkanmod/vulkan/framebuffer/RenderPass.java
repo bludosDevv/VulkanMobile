@@ -100,13 +100,14 @@ public class RenderPass {
             switch (colorAttachmentInfo.finalLayout) {
                 case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
                     VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
+                    // Fixed: Added proper access masks for mobile GPU compatibility
                     subpassDependencies.get(0)
                                        .srcSubpass(VK_SUBPASS_EXTERNAL)
                                        .dstSubpass(0)
                                        .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .dstStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
+                                       .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
                                        .srcAccessMask(0)
-                                       .dstAccessMask(0);
+                                       .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
 
                     renderPassInfo.pDependencies(subpassDependencies);
                 }
@@ -337,8 +338,9 @@ public class RenderPass {
 
             if (framebuffer.hasColorAttachment)
                 colorAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.COLOR, framebuffer.format).setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+            // Mobile fix: Use STORE instead of DONT_CARE for depth to ensure proper synchronization
             if (framebuffer.hasDepthAttachment)
-                depthAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.DEPTH, framebuffer.depthFormat).setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_DONT_CARE);
+                depthAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.DEPTH, framebuffer.depthFormat).setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
         }
 
         public RenderPass build() {

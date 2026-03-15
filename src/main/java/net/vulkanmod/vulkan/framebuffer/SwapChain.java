@@ -29,9 +29,9 @@ import static org.lwjgl.vulkan.KHRSwapchain.*;
 import static org.lwjgl.vulkan.VK10.*;
 
 public class SwapChain extends Framebuffer {
-    // Necessary until tearing-control-unstable-v1 is fully implemented on all GPU Drivers for Wayland
-    // (As Immediate Mode (and by extension Screen tearing) doesn't exist on some Wayland installations currently)
-    private static final int defUncappedMode = checkPresentMode(VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR);
+    // Mobile fix: Prefer FIFO over IMMEDIATE to avoid flickering/tearing on Mali GPUs
+    // Immediate mode can cause flickering on mobile devices
+    private static final int defUncappedMode = checkPresentMode(VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_FIFO_KHR);
 
     private final Long2ReferenceOpenHashMap<long[]> FBO_map = new Long2ReferenceOpenHashMap<>();
 
