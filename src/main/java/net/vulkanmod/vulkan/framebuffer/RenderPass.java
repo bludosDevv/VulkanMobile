@@ -97,44 +97,72 @@ public class RenderPass {
                           .pSubpasses(subpass);
 
             // Layout transitions and visibility dependencies.
-            // Some mobile Vulkan 1.1 drivers are more sensitive to missing/weak external
-            // dependencies when transitioning swapchain images to/from PRESENT.
-            switch (colorAttachmentInfo.finalLayout) {
-                case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
-                    VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(2, stack);
+            // Mobile tile-based GPUs are sensitive to weak/implicit external deps, especially
+            // when depth is preserved across render passes (opaque -> transparent/UI).
+            VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(4, stack);
+            int dependencyCount = 0;
 
-                    // External -> subpass: acquire visibility for color attachment writes.
-                    subpassDependencies.get(0)
-                                       .srcSubpass(VK_SUBPASS_EXTERNAL)
-                                       .dstSubpass(0)
-                                       .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .srcAccessMask(0)
-                                       .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+            if (colorAttachmentInfo != null) {
+                switch (colorAttachmentInfo.finalLayout) {
+                    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
+                        // External -> subpass: acquire visibility for color attachment writes.
+                        subpassDependencies.get(dependencyCount++)
+                                           .srcSubpass(VK_SUBPASS_EXTERNAL)
+                                           .dstSubpass(0)
+                                           .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                           .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                           .srcAccessMask(0)
+                                           .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                                           .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
 
-                    // Subpass -> external: make color attachment writes visible before present.
-                    subpassDependencies.get(1)
-                                       .srcSubpass(0)
-                                       .dstSubpass(VK_SUBPASS_EXTERNAL)
-                                       .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .dstStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
-                                       .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-                                       .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT);
-
-                    renderPassInfo.pDependencies(subpassDependencies);
+                        // Subpass -> external: make color attachment writes visible before present.
+                        subpassDependencies.get(dependencyCount++)
+                                           .srcSubpass(0)
+                                           .dstSubpass(VK_SUBPASS_EXTERNAL)
+                                           .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                           .dstStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
+                                           .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                                           .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT)
+                                           .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
+                    }
+                    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> {
+                        subpassDependencies.get(dependencyCount++)
+                                           .srcSubpass(0)
+                                           .dstSubpass(VK_SUBPASS_EXTERNAL)
+                                           .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                           .dstStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
+                                           .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                                           .dstAccessMask(VK_ACCESS_SHADER_READ_BIT)
+                                           .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
+                    }
                 }
-                case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> {
-                    VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
-                    subpassDependencies.get(0)
-                                       .srcSubpass(0)
-                                       .dstSubpass(VK_SUBPASS_EXTERNAL)
-                                       .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .dstStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
-                                       .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-                                       .dstAccessMask(VK_ACCESS_SHADER_READ_BIT);
+            }
 
-                    renderPassInfo.pDependencies(subpassDependencies);
-                }
+            if (depthAttachmentInfo != null) {
+                // External -> subpass: ensure previous depth writes are visible when depth is loaded
+                // in a later pass (common for transparent/UI overlays).
+                subpassDependencies.get(dependencyCount++)
+                                   .srcSubpass(VK_SUBPASS_EXTERNAL)
+                                   .dstSubpass(0)
+                                   .srcStageMask(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                                   .dstStageMask(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                                   .srcAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+                                   .dstAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+                                   .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
+
+                // Subpass -> external: preserve depth attachment visibility for the next pass.
+                subpassDependencies.get(dependencyCount++)
+                                   .srcSubpass(0)
+                                   .dstSubpass(VK_SUBPASS_EXTERNAL)
+                                   .srcStageMask(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                                   .dstStageMask(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                                   .srcAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+                                   .dstAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+                                   .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
+            }
+
+            if (dependencyCount > 0) {
+                renderPassInfo.pDependencies(subpassDependencies.limit(dependencyCount));
             }
 
             LongBuffer pRenderPass = stack.mallocLong(1);
