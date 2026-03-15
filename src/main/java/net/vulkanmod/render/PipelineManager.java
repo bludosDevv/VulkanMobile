@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.RenderType;
+import net.vulkanmod.config.shader.ShaderPackManager;
 import net.vulkanmod.render.chunk.build.thread.ThreadBuilderPack;
 import net.vulkanmod.render.shader.ShaderLoadUtil;
 import net.vulkanmod.render.vertex.CustomVertexFormat;
@@ -52,7 +53,13 @@ public abstract class PipelineManager {
         JsonObject config = ShaderLoadUtil.getJsonConfig(path, configName);
         pipelineBuilder.parseBindings(config);
 
-        ShaderLoadUtil.loadShaders(pipelineBuilder, config, configName, path);
+        ShaderPackManager.PipelineSpirvPair spirvPair = ShaderPackManager.loadPipelineSpirvPair(configName);
+        if (spirvPair != null) {
+            pipelineBuilder.setSPIRVs(spirvPair.vertex(), spirvPair.fragment());
+        }
+        else {
+            ShaderLoadUtil.loadShaders(pipelineBuilder, config, configName, path);
+        }
 
         var pipeline = pipelineBuilder.createGraphicsPipeline();
 

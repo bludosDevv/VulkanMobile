@@ -119,6 +119,34 @@ A shader pack should contain:
 - pipeline descriptors,
 - optional material/feature toggles.
 
+Current lightweight `pack.json` contract used by runtime overrides:
+
+```json
+{
+  "name": "E-LITE Mobile",
+  "format": 1,
+  "description": "Precompiled SPIR-V pack for Mali Vulkan 1.1",
+  "pipelines": {
+    "terrain": {
+      "vertex": "pipelines/terrain/terrain.vert.spv",
+      "fragment": "pipelines/terrain/terrain.frag.spv"
+    },
+    "terrain_earlyZ": {
+      "vertex": "pipelines/terrain_earlyZ/terrain_earlyZ.vert.spv",
+      "fragment": "pipelines/terrain_earlyZ/terrain_earlyZ.frag.spv"
+    },
+    "blit": {
+      "vertex": "pipelines/blit/blit.vert.spv",
+      "fragment": "pipelines/blit/blit.frag.spv"
+    },
+    "clouds": {
+      "vertex": "pipelines/clouds/clouds.vert.spv",
+      "fragment": "pipelines/clouds/clouds.frag.spv"
+    }
+  }
+}
+```
+
 ### 5.3 Reflection + binding
 - Use SPIR-V reflection metadata to map:
   - descriptor sets and bindings,
