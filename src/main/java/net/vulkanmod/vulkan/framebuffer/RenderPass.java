@@ -11,6 +11,7 @@ import java.nio.LongBuffer;
 
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 import static org.lwjgl.vulkan.VK10.*;
+import static org.lwjgl.vulkan.VK10.VK_DEPENDENCY_BY_REGION_BIT;
 
 public class RenderPass {
     Framebuffer framebuffer;
@@ -96,33 +97,73 @@ public class RenderPass {
                           .pAttachments(attachments)
                           .pSubpasses(subpass);
 
-            //Layout transition subpass depency
-            switch (colorAttachmentInfo.finalLayout) {
-                case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
-                    VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
-                    // Fixed: Added proper access masks for mobile GPU compatibility
-                    subpassDependencies.get(0)
-                                       .srcSubpass(VK_SUBPASS_EXTERNAL)
-                                       .dstSubpass(0)
-                                       .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .srcAccessMask(0)
-                                       .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+            // Layout transitions and visibility dependencies.
+            // Mobile tile-based GPUs are sensitive to weak/implicit external deps, especially
+            // when depth is preserved across render passes (opaque -> transparent/UI).
+            VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(4, stack);
+            int dependencyCount = 0;
 
-                    renderPassInfo.pDependencies(subpassDependencies);
-                }
-                case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> {
-                    VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
-                    subpassDependencies.get(0)
-                                       .srcSubpass(0)
-                                       .dstSubpass(VK_SUBPASS_EXTERNAL)
-                                       .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .dstStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
-                                       .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-                                       .dstAccessMask(VK_ACCESS_SHADER_READ_BIT);
+            if (colorAttachmentInfo != null) {
+                switch (colorAttachmentInfo.finalLayout) {
+                    case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
+                        // External -> subpass: acquire visibility for color attachment writes.
+                        subpassDependencies.get(dependencyCount++)
+                                           .srcSubpass(VK_SUBPASS_EXTERNAL)
+                                           .dstSubpass(0)
+                                           .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                           .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                           .srcAccessMask(0)
+                                           .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                                           .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
 
-                    renderPassInfo.pDependencies(subpassDependencies);
+                        // Subpass -> external: make color attachment writes visible before present.
+                        subpassDependencies.get(dependencyCount++)
+                                           .srcSubpass(0)
+                                           .dstSubpass(VK_SUBPASS_EXTERNAL)
+                                           .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                           .dstStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
+                                           .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                                           .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT)
+                                           .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
+                    }
+                    case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> {
+                        subpassDependencies.get(dependencyCount++)
+                                           .srcSubpass(0)
+                                           .dstSubpass(VK_SUBPASS_EXTERNAL)
+                                           .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                           .dstStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
+                                           .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                                           .dstAccessMask(VK_ACCESS_SHADER_READ_BIT)
+                                           .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
+                    }
                 }
+            }
+
+            if (depthAttachmentInfo != null) {
+                // External -> subpass: ensure previous depth writes are visible when depth is loaded
+                // in a later pass (common for transparent/UI overlays).
+                subpassDependencies.get(dependencyCount++)
+                                   .srcSubpass(VK_SUBPASS_EXTERNAL)
+                                   .dstSubpass(0)
+                                   .srcStageMask(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                                   .dstStageMask(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                                   .srcAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+                                   .dstAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+                                   .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
+
+                // Subpass -> external: preserve depth attachment visibility for the next pass.
+                subpassDependencies.get(dependencyCount++)
+                                   .srcSubpass(0)
+                                   .dstSubpass(VK_SUBPASS_EXTERNAL)
+                                   .srcStageMask(VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                                   .dstStageMask(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
+                                   .srcAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+                                   .dstAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
+                                   .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
+            }
+
+            if (dependencyCount > 0) {
+                renderPassInfo.pDependencies(subpassDependencies.limit(dependencyCount));
             }
 
             LongBuffer pRenderPass = stack.mallocLong(1);
@@ -135,7 +176,43 @@ public class RenderPass {
         }
     }
 
+    private void addLoadOpVisibilityBarriers(VkCommandBuffer commandBuffer, MemoryStack stack) {
+        // When a pass LOADs existing attachments (typical for UI/overlay passes), ensure
+        // writes from previous passes are visible even if layout stays unchanged.
+        if (colorAttachmentInfo != null && colorAttachmentInfo.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD) {
+            VkMemoryBarrier.Buffer colorBarrier = VkMemoryBarrier.calloc(1, stack);
+            colorBarrier.sType(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+            colorBarrier.srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+            colorBarrier.dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+
+            vkCmdPipelineBarrier(commandBuffer,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 0,
+                                 colorBarrier,
+                                 null,
+                                 null);
+        }
+
+        if (depthAttachmentInfo != null && depthAttachmentInfo.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD) {
+            VkMemoryBarrier.Buffer depthBarrier = VkMemoryBarrier.calloc(1, stack);
+            depthBarrier.sType(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+            depthBarrier.srcAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+            depthBarrier.dstAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+
+            vkCmdPipelineBarrier(commandBuffer,
+                                 VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                                 VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                                 0,
+                                 depthBarrier,
+                                 null,
+                                 null);
+        }
+    }
+
     public void beginRenderPass(VkCommandBuffer commandBuffer, long framebufferId, MemoryStack stack) {
+
+        this.addLoadOpVisibilityBarriers(commandBuffer, stack);
 
         if (colorAttachmentInfo != null
             && framebuffer.getColorAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
@@ -205,6 +282,8 @@ public class RenderPass {
     }
 
     public void beginDynamicRendering(VkCommandBuffer commandBuffer, MemoryStack stack) {
+        this.addLoadOpVisibilityBarriers(commandBuffer, stack);
+
         if (colorAttachmentInfo != null
             && framebuffer.getColorAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
         {
