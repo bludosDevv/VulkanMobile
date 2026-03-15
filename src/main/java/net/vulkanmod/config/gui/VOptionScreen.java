@@ -213,7 +213,7 @@ public class VOptionScreen extends Screen {
         int listTop = 72;
         int listBottom = this.height - 96;
 
-        this.shaderPackSelectionList = new ShaderPackSelectionList(this.minecraft, panelWidth, listBottom - listTop, listTop, listBottom, 22, panelX);
+        this.shaderPackSelectionList = new ShaderPackSelectionList(this, this.minecraft, panelWidth, listBottom - listTop, listTop, listBottom, panelX);
         this.addWidget(this.shaderPackSelectionList);
         this.rebuildShaderSelectionList();
 
@@ -244,10 +244,10 @@ public class VOptionScreen extends Screen {
 
     private void rebuildShaderSelectionList() {
         this.shaderPackEntries = ShaderPackManager.listShaderPackEntries();
-        this.shaderPackSelectionList.clearEntries();
+        this.shaderPackSelectionList.children().clear();
 
         if (this.shaderPackEntries.isEmpty()) {
-            this.shaderPackSelectionList.addEntry(new ShaderPackSelectionList.Entry(this.shaderPackSelectionList, null, Component.translatable("vulkanmod.options.shaders.empty")));
+            this.shaderPackSelectionList.addPackEntry(new ShaderPackSelectionList.Entry(this.shaderPackSelectionList, null, Component.translatable("vulkanmod.options.shaders.empty")));
             this.shaderPackSelectionList.setSelected(null);
             return;
         }
@@ -257,7 +257,7 @@ public class VOptionScreen extends Screen {
         for (Path path : this.shaderPackEntries) {
             String fileName = path.getFileName().toString();
             ShaderPackSelectionList.Entry entry = new ShaderPackSelectionList.Entry(this.shaderPackSelectionList, path, Component.literal(fileName));
-            this.shaderPackSelectionList.addEntry(entry);
+            this.shaderPackSelectionList.addPackEntry(entry);
 
             if (fileName.equals(this.pendingShaderPack)) {
                 selectedEntry = entry;
@@ -537,14 +537,19 @@ public class VOptionScreen extends Screen {
         }
     }
 
-    private final class ShaderPackSelectionList extends ObjectSelectionList<ShaderPackSelectionList.Entry> {
+    private static final class ShaderPackSelectionList extends ObjectSelectionList<ShaderPackSelectionList.Entry> {
         private final int left;
+        private final VOptionScreen screen;
 
-        private ShaderPackSelectionList(Minecraft minecraft, int width, int height, int y0, int y1, int itemHeight, int left) {
-            super(minecraft, width, height, y0, y1, itemHeight);
+        private ShaderPackSelectionList(VOptionScreen screen, Minecraft minecraft, int width, int height, int y0, int y1, int left) {
+            super(minecraft, width, height, y0, y1);
+            this.screen = screen;
             this.left = left;
-            this.setRenderBackground(false);
-            this.setRenderTopAndBottom(false);
+            this.itemHeight = 22;
+        }
+
+        public void addPackEntry(Entry entry) {
+            this.children().add(entry);
         }
 
         @Override
@@ -561,30 +566,32 @@ public class VOptionScreen extends Screen {
         protected void renderBackground(GuiGraphics guiGraphics) {
         }
 
-        private final class Entry extends ObjectSelectionList.Entry<Entry> {
+        public static final class Entry extends ObjectSelectionList.Entry<Entry> {
+            private final ShaderPackSelectionList list;
             private final Path path;
             private final Component label;
 
-            private Entry(ShaderPackSelectionList ignoredParent, Path path, Component label) {
+            public Entry(ShaderPackSelectionList list, Path path, Component label) {
+                this.list = list;
                 this.path = path;
                 this.label = label;
             }
 
-            private String getPackName() {
+            public String getPackName() {
                 return this.path != null ? this.path.getFileName().toString() : null;
             }
 
             @Override
-            public void render(GuiGraphics guiGraphics, int index, int top, int left, int rowWidth, int rowHeight, int mouseX, int mouseY, boolean hovered, float partialTick) {
+            public void render(GuiGraphics guiGraphics, int index, int y, int x, int rowHeight, int rowWidth, int mouseX, int mouseY, boolean hovered, float partialTick) {
                 int bg = hovered ? ColorUtil.ARGB.pack(0.3f, 0.0f, 0.0f, 0.30f) : ColorUtil.ARGB.pack(0.0f, 0.0f, 0.0f, 0.25f);
-                GuiRenderer.fill(left, top, left + rowWidth, top + rowHeight - 1, bg);
+                GuiRenderer.fill(x, y, x + rowWidth, y + rowHeight - 1, bg);
 
-                if (ShaderPackSelectionList.this.getSelected() == this) {
-                    GuiRenderer.fill(left, top, left + 2, top + rowHeight - 1, RED);
+                if (this.list.getSelected() == this) {
+                    GuiRenderer.fill(x, y, x + 2, y + rowHeight - 1, RED);
                 }
 
                 int color = this.path == null ? 0xFFAAAAAA : 0xFFFFFFFF;
-                GuiRenderer.drawString(VOptionScreen.this.font, this.label, left + 8, top + 7, color);
+                GuiRenderer.drawString(this.list.screen.font, this.label, x + 8, y + 7, color);
             }
 
             @Override
@@ -595,8 +602,8 @@ public class VOptionScreen extends Screen {
             @Override
             public boolean mouseClicked(double mouseX, double mouseY, int button) {
                 if (button == 0 && this.path != null) {
-                    ShaderPackSelectionList.this.setSelected(this);
-                    VOptionScreen.this.onShaderSelected(this);
+                    this.list.setSelected(this);
+                    this.list.screen.onShaderSelected(this);
                     return true;
                 }
 
