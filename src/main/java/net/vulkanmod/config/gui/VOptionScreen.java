@@ -15,6 +15,7 @@ import net.minecraft.util.FormattedCharSequence;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.config.UpdateChecker;
 import net.vulkanmod.config.gui.render.GuiRenderer;
+import net.vulkanmod.config.shader.ShaderPackManager;
 import net.vulkanmod.config.gui.widget.VAbstractWidget;
 import net.vulkanmod.config.gui.widget.VButtonWidget;
 import net.vulkanmod.config.option.OptionPage;
@@ -22,6 +23,7 @@ import net.vulkanmod.config.option.Options;
 import net.vulkanmod.vulkan.VRenderSystem;
 import net.vulkanmod.vulkan.util.ColorUtil;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,6 +37,8 @@ public class VOptionScreen extends Screen {
     private final List<OptionPage> optionPages;
 
     private int currentListIdx = 0;
+    private int shadersPageIdx = -1;
+    private List<Path> shaderPackEntries = List.of();
 
     private int tooltipX;
     private int tooltipY;
@@ -81,11 +85,19 @@ public class VOptionScreen extends Screen {
                 Options.getOtherOpts()
         );
         this.optionPages.add(page);
+
+        this.shadersPageIdx = this.optionPages.size();
+        page = new OptionPage(
+                Component.translatable("vulkanmod.options.pages.shaders").getString(),
+                new OptionBlock[0]
+        );
+        this.optionPages.add(page);
     }
 
     @Override
     protected void init() {
         this.addPages();
+        this.shaderPackEntries = ShaderPackManager.listShaderPackEntries();
 
         int top = 40;
         int bottom = 60;
@@ -254,11 +266,50 @@ public class VOptionScreen extends Screen {
         VOptionList currentList = this.optionPages.get(this.currentListIdx).getOptionList();
         currentList.updateState(mouseX, mouseY);
         currentList.renderWidget(mouseX, mouseY);
+
+        if (this.currentListIdx == this.shadersPageIdx) {
+            this.renderShadersPanel();
+        }
+
         renderButtons(mouseX, mouseY);
 
         List<FormattedCharSequence> list = getHoveredButtonTooltip(currentList, mouseX, mouseY);
         if (list != null) {
             this.renderTooltip(list, this.tooltipX, this.tooltipY);
+        }
+    }
+
+    private void renderShadersPanel() {
+        int panelX = this.tooltipX;
+        int panelY = this.tooltipY;
+        int panelWidth = this.tooltipWidth;
+        int panelBottom = this.height - 36;
+
+        int bgColor = ColorUtil.ARGB.pack(0.08f, 0.08f, 0.08f, 0.75f);
+        GuiRenderer.fill(panelX, panelY, panelX + panelWidth, panelBottom, bgColor);
+        GuiRenderer.renderBorder(panelX, panelY, panelX + panelWidth, panelBottom, 1, RED);
+
+        int lineY = panelY + 6;
+        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.title").getString(), panelX + 6, lineY, 0xFFFFFFFF);
+        lineY += 12;
+
+        Path dir = ShaderPackManager.getShaderPacksDir();
+        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.path", dir.toString()).getString(), panelX + 6, lineY, 0xFFCCCCCC);
+        lineY += 12;
+
+        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.found", this.shaderPackEntries.size()).getString(), panelX + 6, lineY, 0xFFFFFFFF);
+        lineY += 14;
+
+        if (this.shaderPackEntries.isEmpty()) {
+            GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.empty").getString(), panelX + 6, lineY, 0xFFAAAAAA);
+            return;
+        }
+
+        int maxEntries = Math.max(1, (panelBottom - lineY - 6) / 10);
+        for (int i = 0; i < Math.min(maxEntries, this.shaderPackEntries.size()); ++i) {
+            String name = this.shaderPackEntries.get(i).getFileName().toString();
+            GuiRenderer.drawString(this.font, "- " + name, panelX + 6, lineY, 0xFFFFFFFF);
+            lineY += 10;
         }
     }
 
