@@ -90,6 +90,7 @@ public class Renderer {
     private ArrayList<Long> imageAvailableSemaphores;
     private ArrayList<Long> renderFinishedSemaphores;
     private ArrayList<Long> inFlightFences;
+    private ArrayList<Long> swapChainImageFences;
     private List<CommandPool.CommandBuffer> transferCbs;
 
     private Framebuffer boundFramebuffer;
@@ -180,6 +181,11 @@ public class Renderer {
         imageAvailableSemaphores = new ArrayList<>(framesNum);
         renderFinishedSemaphores = new ArrayList<>(framesNum);
         inFlightFences = new ArrayList<>(framesNum);
+        swapChainImageFences = new ArrayList<>(swapChain.getImagesNum());
+
+        for (int i = 0; i < swapChain.getImagesNum(); ++i) {
+            swapChainImageFences.add(VK_NULL_HANDLE);
+        }
 
         try (MemoryStack stack = stackPush()) {
 
@@ -293,6 +299,14 @@ public class Renderer {
             }
 
             imageIndex = pImageIndex.get(0);
+
+            long imageFence = swapChainImageFences.get(imageIndex);
+            if (imageFence != VK_NULL_HANDLE) {
+                // Some mobile Vulkan drivers require explicit per-image synchronization to avoid
+                // presenting partially rendered / stale swapchain images.
+                vkWaitForFences(device, imageFence, true, VUtil.UINT64_MAX);
+            }
+            swapChainImageFences.set(imageIndex, inFlightFences.get(currentFrame));
 
             this.beginMainRenderPass(stack);
         }
