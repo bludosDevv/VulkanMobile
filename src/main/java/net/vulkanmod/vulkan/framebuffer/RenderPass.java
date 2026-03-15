@@ -11,7 +11,7 @@ import java.nio.LongBuffer;
 
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 import static org.lwjgl.vulkan.VK10.*;
-import static org.lwjgl.vulkan.VK10.VK_SUBPASS_DEPENDENCY_BY_REGION_BIT;
+import static org.lwjgl.vulkan.VK10.VK_DEPENDENCY_BY_REGION_BIT;
 
 public class RenderPass {
     Framebuffer framebuffer;
@@ -114,7 +114,7 @@ public class RenderPass {
                                            .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
                                            .srcAccessMask(0)
                                            .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-                                           .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
+                                           .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
 
                         // Subpass -> external: make color attachment writes visible before present.
                         subpassDependencies.get(dependencyCount++)
@@ -124,7 +124,7 @@ public class RenderPass {
                                            .dstStageMask(VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT)
                                            .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
                                            .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT)
-                                           .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
+                                           .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
                     }
                     case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> {
                         subpassDependencies.get(dependencyCount++)
@@ -134,7 +134,7 @@ public class RenderPass {
                                            .dstStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
                                            .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
                                            .dstAccessMask(VK_ACCESS_SHADER_READ_BIT)
-                                           .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
+                                           .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
                     }
                 }
             }
@@ -149,7 +149,7 @@ public class RenderPass {
                                    .dstStageMask(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
                                    .srcAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
                                    .dstAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
-                                   .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
+                                   .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
 
                 // Subpass -> external: preserve depth attachment visibility for the next pass.
                 subpassDependencies.get(dependencyCount++)
@@ -159,7 +159,7 @@ public class RenderPass {
                                    .dstStageMask(VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT)
                                    .srcAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
                                    .dstAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT)
-                                   .dependencyFlags(VK_SUBPASS_DEPENDENCY_BY_REGION_BIT);
+                                   .dependencyFlags(VK_DEPENDENCY_BY_REGION_BIT);
             }
 
             if (dependencyCount > 0) {
