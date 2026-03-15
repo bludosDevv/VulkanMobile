@@ -113,8 +113,9 @@ public class Device {
             var a = stack.mallocInt(1);
             vkEnumerateInstanceVersion(a);
             int vkVer1 = a.get(0);
-            if (VK_VERSION_MINOR(vkVer1) < 2) {
-                throw new RuntimeException("Vulkan 1.2 not supported: Only Has: %s".formatted(decDefVersion(vkVer1)));
+            // Allow Vulkan 1.1+ for mobile compatibility
+            if (VK_VERSION_MAJOR(vkVer1) < 1 || (VK_VERSION_MAJOR(vkVer1) == 1 && VK_VERSION_MINOR(vkVer1) < 1)) {
+                throw new RuntimeException("Vulkan 1.1 not supported: Only Has: %s".formatted(decDefVersion(vkVer1)));
             }
             return vkVer1;
         }
