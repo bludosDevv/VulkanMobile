@@ -175,7 +175,43 @@ public class RenderPass {
         }
     }
 
+    private void addLoadOpVisibilityBarriers(VkCommandBuffer commandBuffer, MemoryStack stack) {
+        // When a pass LOADs existing attachments (typical for UI/overlay passes), ensure
+        // writes from previous passes are visible even if layout stays unchanged.
+        if (colorAttachmentInfo != null && colorAttachmentInfo.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD) {
+            VkMemoryBarrier.Buffer colorBarrier = VkMemoryBarrier.calloc(1, stack);
+            colorBarrier.sType(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+            colorBarrier.srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+            colorBarrier.dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+
+            vkCmdPipelineBarrier(commandBuffer,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 0,
+                                 colorBarrier,
+                                 null,
+                                 null);
+        }
+
+        if (depthAttachmentInfo != null && depthAttachmentInfo.loadOp == VK_ATTACHMENT_LOAD_OP_LOAD) {
+            VkMemoryBarrier.Buffer depthBarrier = VkMemoryBarrier.calloc(1, stack);
+            depthBarrier.sType(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+            depthBarrier.srcAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+            depthBarrier.dstAccessMask(VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT);
+
+            vkCmdPipelineBarrier(commandBuffer,
+                                 VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                                 VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT,
+                                 0,
+                                 depthBarrier,
+                                 null,
+                                 null);
+        }
+    }
+
     public void beginRenderPass(VkCommandBuffer commandBuffer, long framebufferId, MemoryStack stack) {
+
+        this.addLoadOpVisibilityBarriers(commandBuffer, stack);
 
         if (colorAttachmentInfo != null
             && framebuffer.getColorAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
@@ -245,6 +281,8 @@ public class RenderPass {
     }
 
     public void beginDynamicRendering(VkCommandBuffer commandBuffer, MemoryStack stack) {
+        this.addLoadOpVisibilityBarriers(commandBuffer, stack);
+
         if (colorAttachmentInfo != null
             && framebuffer.getColorAttachment().getCurrentLayout() != VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
         {
