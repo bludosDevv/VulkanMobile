@@ -290,25 +290,25 @@ public class VOptionScreen extends Screen {
         GuiRenderer.renderBorder(panelX, panelY, panelX + panelWidth, panelBottom, 1, RED);
 
         int lineY = panelY + 6;
-        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.title").getString(), panelX + 6, lineY, 0xFFFFFFFF);
+        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.title"), panelX + 6, lineY, 0xFFFFFFFF);
         lineY += 12;
 
         Path dir = ShaderPackManager.getShaderPacksDir();
-        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.path", dir.toString()).getString(), panelX + 6, lineY, 0xFFCCCCCC);
+        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.path", dir.toString()), panelX + 6, lineY, 0xFFCCCCCC);
         lineY += 12;
 
-        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.found", this.shaderPackEntries.size()).getString(), panelX + 6, lineY, 0xFFFFFFFF);
+        GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.found", this.shaderPackEntries.size()), panelX + 6, lineY, 0xFFFFFFFF);
         lineY += 14;
 
         if (this.shaderPackEntries.isEmpty()) {
-            GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.empty").getString(), panelX + 6, lineY, 0xFFAAAAAA);
+            GuiRenderer.drawString(this.font, Component.translatable("vulkanmod.options.shaders.empty"), panelX + 6, lineY, 0xFFAAAAAA);
             return;
         }
 
         int maxEntries = Math.max(1, (panelBottom - lineY - 6) / 10);
         for (int i = 0; i < Math.min(maxEntries, this.shaderPackEntries.size()); ++i) {
             String name = this.shaderPackEntries.get(i).getFileName().toString();
-            GuiRenderer.drawString(this.font, "- " + name, panelX + 6, lineY, 0xFFFFFFFF);
+            GuiRenderer.drawString(this.font, Component.literal("- " + name), panelX + 6, lineY, 0xFFFFFFFF);
             lineY += 10;
         }
     }

@@ -11,6 +11,7 @@ import java.nio.LongBuffer;
 
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 import static org.lwjgl.vulkan.VK10.*;
+import static org.lwjgl.vulkan.VK10.VK_SUBPASS_DEPENDENCY_BY_REGION_BIT;
 
 public class RenderPass {
     Framebuffer framebuffer;
