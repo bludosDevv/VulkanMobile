@@ -3,10 +3,12 @@ package net.vulkanmod.config.shader;
 import net.fabricmc.loader.api.FabricLoader;
 import net.vulkanmod.Initializer;
 import net.vulkanmod.vulkan.shader.SPIRVUtils;
+import net.vulkanmod.vulkan.shader.SpirvShaderModules;
+
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -16,9 +18,11 @@ public final class ShaderPackManager {
     private static final String SHADER_PACKS_DIR_NAME = "shaderpacks";
     private static final String MANIFEST_FILE_NAME = "pack.json";
 
-    public record PipelineSpirvPair(SPIRVUtils.SPIRV vertex, SPIRVUtils.SPIRV fragment) {}
+    public record PipelineSpirvPair(SPIRVUtils.SPIRV vertex, SPIRVUtils.SPIRV fragment) {
+    }
 
-    private ShaderPackManager() {}
+    private ShaderPackManager() {
+    }
 
     public static Path getShaderPacksDir() {
         return FabricLoader.getInstance().getGameDir().resolve(SHADER_PACKS_DIR_NAME);
@@ -38,17 +42,21 @@ public final class ShaderPackManager {
         ensureShaderPacksDirectory();
 
         Path shaderPacksDir = getShaderPacksDir();
+        List<Path> entries = new ArrayList<>();
+
         try (Stream<Path> stream = Files.list(shaderPacksDir)) {
-            return stream.filter(path -> {
-                            String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
-                            return Files.isDirectory(path) || name.endsWith(".zip");
-                        })
-                        .sorted(Comparator.comparing(path -> path.getFileName().toString().toLowerCase(Locale.ROOT)))
-                        .toList();
+            stream.filter(path -> {
+                        String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
+                        return Files.isDirectory(path) || name.endsWith(".zip");
+                    })
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString().toLowerCase(Locale.ROOT)))
+                    .forEach(entries::add);
         } catch (IOException e) {
             Initializer.LOGGER.error("Failed to list shaderpacks directory entries from {}", shaderPacksDir, e);
             return List.of();
         }
+
+        return List.copyOf(entries);
     }
 
     public static Path getActiveShaderPackDir() {
@@ -56,16 +64,17 @@ public final class ShaderPackManager {
 
         Path shaderPacksDir = getShaderPacksDir();
         String requestedPack = System.getProperty("vulkanmod.shaderpack", "E-LITE");
-        Path requestedPackDir = shaderPacksDir.resolve(requestedPack);
+        Path requestedDir = shaderPacksDir.resolve(requestedPack).normalize();
 
-        if (Files.isDirectory(requestedPackDir)) {
-            return requestedPackDir;
+        if (requestedDir.startsWith(shaderPacksDir) && Files.isDirectory(requestedDir)) {
+            return requestedDir;
         }
 
         try (Stream<Path> stream = Files.list(shaderPacksDir)) {
             return stream.filter(Files::isDirectory)
-                         .findFirst()
-                         .orElse(null);
+                    .sorted(Comparator.comparing(path -> path.getFileName().toString().toLowerCase(Locale.ROOT)))
+                    .findFirst()
+                    .orElse(null);
         } catch (IOException e) {
             Initializer.LOGGER.error("Failed to discover active shader pack directory in {}", shaderPacksDir, e);
             return null;
@@ -80,6 +89,7 @@ public final class ShaderPackManager {
 
         Path manifestPath = packDir.resolve(MANIFEST_FILE_NAME);
         if (!Files.isRegularFile(manifestPath)) {
+            Initializer.LOGGER.warn("No pack.json found for active shader pack at {}", packDir);
             return null;
         }
 
@@ -98,6 +108,10 @@ public final class ShaderPackManager {
     }
 
     public static SPIRVUtils.SPIRV loadPipelineShaderSpirv(String pipelineId, SPIRVUtils.ShaderKind shaderKind) {
+        if (pipelineId == null || pipelineId.isBlank()) {
+            return null;
+        }
+
         ShaderPackManifest manifest = loadActiveManifest();
         Path packDir = getActiveShaderPackDir();
 
@@ -105,14 +119,14 @@ public final class ShaderPackManager {
             return null;
         }
 
-        ShaderPackManifest.PipelineEntry entry = manifest.getPipelineEntry(pipelineId);
-        if (entry == null) {
+        ShaderPackManifest.PipelineEntry pipelineEntry = manifest.getPipelineEntry(pipelineId);
+        if (pipelineEntry == null) {
             return null;
         }
 
         String relativePath = switch (shaderKind) {
-            case VERTEX_SHADER -> entry.vertex();
-            case FRAGMENT_SHADER -> entry.fragment();
+            case VERTEX_SHADER -> pipelineEntry.vertex();
+            case FRAGMENT_SHADER -> pipelineEntry.fragment();
             default -> null;
         };
 
@@ -132,10 +146,7 @@ public final class ShaderPackManager {
         }
 
         try {
-            byte[] bytes = Files.readAllBytes(shaderPath);
-            ByteBuffer bytecode = ByteBuffer.allocateDirect(bytes.length);
-            bytecode.put(bytes).flip();
-            return new SPIRVUtils.SPIRV(0L, bytecode);
+            return SpirvShaderModules.loadSpirv(shaderPath);
         } catch (IOException e) {
             Initializer.LOGGER.error("Failed to load SPIR-V shader {}", shaderPath, e);
             return null;
