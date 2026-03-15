@@ -13,6 +13,7 @@ import net.vulkanmod.vulkan.texture.VTextureSelector;
 import net.vulkanmod.vulkan.texture.VulkanImage;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
+import org.lwjgl.vulkan.VkMemoryBarrier;
 import org.lwjgl.vulkan.VkRect2D;
 
 import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -79,6 +80,21 @@ public class DefaultMainPass implements MainPass {
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             SwapChain framebuffer = Renderer.getInstance().getSwapChain();
+
+            // Explicitly flush color attachment writes (world + UI) before PRESENT transition.
+            VkMemoryBarrier.Buffer presentBarrier = VkMemoryBarrier.calloc(1, stack);
+            presentBarrier.sType(VK_STRUCTURE_TYPE_MEMORY_BARRIER);
+            presentBarrier.srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+            presentBarrier.dstAccessMask(VK_ACCESS_MEMORY_READ_BIT);
+
+            vkCmdPipelineBarrier(commandBuffer,
+                                 VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                                 VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                                 0,
+                                 presentBarrier,
+                                 null,
+                                 null);
+
             framebuffer.getColorAttachment().transitionImageLayout(stack, commandBuffer, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         }
 
