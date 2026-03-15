@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.RenderType;
+import net.vulkanmod.Initializer;
 import net.vulkanmod.config.shader.ShaderPackManager;
 import net.vulkanmod.render.chunk.build.thread.ThreadBuilderPack;
 import net.vulkanmod.render.shader.ShaderLoadUtil;
@@ -14,18 +15,31 @@ import net.vulkanmod.vulkan.shader.Pipeline;
 
 import java.util.function.Function;
 
+/**
+ * Central pipeline registry/creation point for terrain + core fullscreen pipelines.
+ *
+ * Shader pack hook point:
+ * - createPipeline(...) first tries shaderpack SPIR-V overrides via ShaderPackManager.
+ * - when both vertex + fragment SPIR-V are available, it injects them with
+ *   pipelineBuilder.setSPIRVs(...), fully bypassing the default GLSL loading path.
+ * - otherwise it falls back to built-in shaders via ShaderLoadUtil.loadShaders(...).
+ */
 public abstract class PipelineManager {
     public static VertexFormat terrainVertexFormat;
+
+    static GraphicsPipeline terrainShader;
+    static GraphicsPipeline terrainShaderEarlyZ;
+    static GraphicsPipeline fastBlitPipeline;
+    static GraphicsPipeline cloudsPipeline;
+
+    private static Function<TerrainRenderType, GraphicsPipeline> shaderGetter;
+
+    private PipelineManager() {
+    }
 
     public static void setTerrainVertexFormat(VertexFormat format) {
         terrainVertexFormat = format;
     }
-
-    static GraphicsPipeline
-            terrainShader, terrainShaderEarlyZ,
-            fastBlitPipeline, cloudsPipeline;
-
-    private static Function<TerrainRenderType, GraphicsPipeline> shaderGetter;
 
     public static void init() {
         setTerrainVertexFormat(CustomVertexFormat.COMPRESSED_TERRAIN);
@@ -35,8 +49,9 @@ public abstract class PipelineManager {
     }
 
     public static void setDefaultShader() {
-        setShaderGetter(
-                renderType -> renderType == TerrainRenderType.TRANSLUCENT ? terrainShaderEarlyZ : terrainShader);
+        setShaderGetter(renderType -> renderType == TerrainRenderType.TRANSLUCENT
+                ? terrainShaderEarlyZ
+                : terrainShader);
     }
 
     private static void createBasicPipelines() {
@@ -46,28 +61,50 @@ public abstract class PipelineManager {
         cloudsPipeline = createPipeline("clouds", DefaultVertexFormat.POSITION_COLOR);
     }
 
+    /**
+     * Builds a graphics pipeline from JSON state + shader source.
+     *
+     * Required pipeline state info (blend/depth/raster/descriptors/etc.) is parsed from the
+     * standard JSON config via parseBindings(config) exactly like the default path.
+     */
     private static GraphicsPipeline createPipeline(String configName, VertexFormat vertexFormat) {
         Pipeline.Builder pipelineBuilder = new Pipeline.Builder(vertexFormat, configName);
 
-        final String path = ShaderLoadUtil.resolveShaderPath("basic");
-        JsonObject config = ShaderLoadUtil.getJsonConfig(path, configName);
+        final String shaderRootPath = ShaderLoadUtil.resolveShaderPath("basic");
+        JsonObject config = ShaderLoadUtil.getJsonConfig(shaderRootPath, configName);
         pipelineBuilder.parseBindings(config);
 
-        ShaderPackManager.PipelineSpirvPair spirvPair = ShaderPackManager.loadPipelineSpirvPair(configName);
-        if (spirvPair != null) {
-            pipelineBuilder.setSPIRVs(spirvPair.vertex(), spirvPair.fragment());
-        }
-        else {
-            ShaderLoadUtil.loadShaders(pipelineBuilder, config, configName, path);
+        if (!tryApplyShaderPackOverrides(pipelineBuilder, configName)) {
+            ShaderLoadUtil.loadShaders(pipelineBuilder, config, configName, shaderRootPath);
         }
 
-        var pipeline = pipelineBuilder.createGraphicsPipeline();
-
+        GraphicsPipeline pipeline = pipelineBuilder.createGraphicsPipeline();
         for (var buffer : pipeline.getBuffers()) {
             buffer.setUseGlobalBuffer(true);
         }
 
         return pipeline;
+    }
+
+    /**
+     * Hook for Phase 3 SPIR-V pack injection.
+     *
+     * @return true when override shader modules were injected and default loader should be skipped.
+     */
+    private static boolean tryApplyShaderPackOverrides(Pipeline.Builder pipelineBuilder, String pipelineId) {
+        ShaderPackManager.PipelineSpirvPair spirvPair = ShaderPackManager.loadPipelineSpirvPair(pipelineId);
+        if (spirvPair == null) {
+            return false;
+        }
+
+        if (spirvPair.vertex() == null || spirvPair.fragment() == null) {
+            Initializer.LOGGER.warn("Ignoring incomplete SPIR-V override for pipeline '{}'", pipelineId);
+            return false;
+        }
+
+        pipelineBuilder.setSPIRVs(spirvPair.vertex(), spirvPair.fragment());
+        Initializer.LOGGER.info("Using shaderpack SPIR-V override for pipeline '{}'", pipelineId);
+        return true;
     }
 
     public static GraphicsPipeline getTerrainShader(TerrainRenderType renderType) {
