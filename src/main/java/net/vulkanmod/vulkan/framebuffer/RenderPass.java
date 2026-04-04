@@ -337,10 +337,11 @@ public class RenderPass {
             this.framebuffer = framebuffer;
 
             if (framebuffer.hasColorAttachment)
-                colorAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.COLOR, framebuffer.format).setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+                colorAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.COLOR, framebuffer.format).setOps(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
             // Mobile fix: Use STORE instead of DONT_CARE for depth to ensure proper synchronization
+            // Also use LOAD instead of CLEAR to prevent UI and world blocks disappearing on Mali GPUs
             if (framebuffer.hasDepthAttachment)
-                depthAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.DEPTH, framebuffer.depthFormat).setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+                depthAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.DEPTH, framebuffer.depthFormat).setOps(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
         }
 
         public RenderPass build() {
