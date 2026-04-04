@@ -291,15 +291,20 @@ public class RenderSection {
     }
 
     public void resetDrawParameters(TerrainRenderType renderType) {
+        DrawBuffers drawBuffers = this.chunkArea.getDrawBuffers();
+        AreaBuffer areaBuffer = drawBuffers.getAreaBuffer(renderType);
+
+        int oldOffset = -1;
+
         for (int i = 0; i < QuadFacing.COUNT; ++i) {
-            DrawBuffers drawBuffers = this.chunkArea.getDrawBuffers();
             long ptr = DrawParametersBuffer.getParamsPtr(drawBuffers.getDrawParamsPtr(), this.inAreaIndex, renderType.ordinal(), i);
 
-            AreaBuffer areaBuffer = drawBuffers.getAreaBuffer(renderType);
             int vertexOffset = DrawParametersBuffer.getVertexOffset(ptr);
             if (areaBuffer != null && vertexOffset != -1) {
-                int segmentOffset = vertexOffset * DrawBuffers.VERTEX_SIZE;
-                areaBuffer.setSegmentFree(segmentOffset);
+                if (oldOffset == -1) {
+                    oldOffset = vertexOffset;
+                    areaBuffer.freeSegment(oldOffset);
+                }
             }
 
             DrawParametersBuffer.resetParameters(ptr);
