@@ -9,9 +9,8 @@ on:
   push:
     branches:
       - main
+      - dev
   pull_request:
-    branches:
-      - main
 
 jobs:
   build:
@@ -36,6 +35,14 @@ jobs:
         run: chmod +x ./gradlew
       - name: build
         run: ./gradlew build
+      - name: Set Release/Debug name
+        id: build_name
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "type=Debug" >> $GITHUB_OUTPUT
+          else
+            echo "type=Release" >> $GITHUB_OUTPUT
+          fi
       - name: zip artifacts
         if: ${{ matrix.java == '21' }}
         run: |
@@ -46,7 +53,7 @@ jobs:
         if: ${{ matrix.java == '21' }} # Only upload artifacts built from latest java
         uses: actions/upload-artifact@v4
         with:
-          name: Vulkan Mobile
+          name: Vulkan Mobile - ${{ steps.build_name.outputs.type }}
           path: build/zip/VulkanMobile.zip
           retention-days: 30
 
