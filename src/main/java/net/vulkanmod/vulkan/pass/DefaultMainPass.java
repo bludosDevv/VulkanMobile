@@ -43,9 +43,9 @@ public class DefaultMainPass implements MainPass {
     private void createRenderPasses() {
         RenderPass.Builder builder = RenderPass.builder(this.mainFramebuffer);
         builder.getColorAttachmentInfo().setFinalLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        // Use CLEAR instead of DONT_CARE to avoid flickering on mobile GPUs (Mali)
-        builder.getColorAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
-        builder.getDepthAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+        // Use LOAD instead of CLEAR/DONT_CARE to avoid flickering and missing UI/world blocks on mobile GPUs (Mali)
+        builder.getColorAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
+        builder.getDepthAttachmentInfo().setOps(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
 
         this.mainRenderPass = builder.build();
 

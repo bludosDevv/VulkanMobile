@@ -3,10 +3,10 @@
   "id": "vulkanmod",
   "version": "${version}",
 
-  "name": "VulkanMod",
-  "description": "Bring Vulkan to Minecraft!",
+  "name": "VulkanMobile",
+  "description": "Bring Vulkan to Minecraft! Mobile version handled by Bludos. Original dev xCollateral won't provide Android support.",
   "authors": [
-    "Collateral"
+    "bludosdev"
   ],
   "contact": {
     "homepage": "",

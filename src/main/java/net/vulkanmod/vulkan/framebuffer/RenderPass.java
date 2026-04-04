@@ -57,8 +57,8 @@ public class RenderPass {
                                .samples(VK_SAMPLE_COUNT_1_BIT)
                                .loadOp(colorAttachmentInfo.loadOp)
                                .storeOp(colorAttachmentInfo.storeOp)
-                               .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
-                               .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                               .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
+                               .stencilStoreOp(VK_ATTACHMENT_STORE_OP_STORE)
                                .initialLayout(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL)
                                .finalLayout(colorAttachmentInfo.finalLayout);
 
@@ -79,16 +79,18 @@ public class RenderPass {
                                .samples(VK_SAMPLE_COUNT_1_BIT)
                                .loadOp(depthAttachmentInfo.loadOp)
                                .storeOp(depthAttachmentInfo.storeOp)
-                               .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_DONT_CARE)
-                               .stencilStoreOp(VK_ATTACHMENT_STORE_OP_DONT_CARE)
+                               .stencilLoadOp(VK_ATTACHMENT_LOAD_OP_LOAD)
+                               .stencilStoreOp(VK_ATTACHMENT_STORE_OP_STORE)
                                .initialLayout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL)
                                .finalLayout(depthAttachmentInfo.finalLayout);
 
-                VkAttachmentReference depthAttachmentRef = attachmentRefs.get(1)
-                                                                         .attachment(1)
+                VkAttachmentReference depthAttachmentRef = attachmentRefs.get(i)
+                                                                         .attachment(i)
                                                                          .layout(VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
 
                 subpass.pDepthStencilAttachment(depthAttachmentRef);
+
+                ++i;
             }
 
             VkRenderPassCreateInfo renderPassInfo = VkRenderPassCreateInfo.calloc(stack);
@@ -96,34 +98,47 @@ public class RenderPass {
                           .pAttachments(attachments)
                           .pSubpasses(subpass);
 
-            //Layout transition subpass depency
-            switch (colorAttachmentInfo.finalLayout) {
-                case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> {
-                    VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
-                    // Fixed: Added proper access masks for mobile GPU compatibility
-                    subpassDependencies.get(0)
-                                       .srcSubpass(VK_SUBPASS_EXTERNAL)
-                                       .dstSubpass(0)
-                                       .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .dstStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .srcAccessMask(0)
-                                       .dstAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
-
-                    renderPassInfo.pDependencies(subpassDependencies);
-                }
-                case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> {
-                    VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(1, stack);
-                    subpassDependencies.get(0)
-                                       .srcSubpass(0)
-                                       .dstSubpass(VK_SUBPASS_EXTERNAL)
-                                       .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
-                                       .dstStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
-                                       .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
-                                       .dstAccessMask(VK_ACCESS_SHADER_READ_BIT);
-
-                    renderPassInfo.pDependencies(subpassDependencies);
-                }
+            // Layout transition subpass dependencies
+            int dependencyCount = 0;
+            if (colorAttachmentInfo != null && colorAttachmentInfo.finalLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+                dependencyCount = 2;
+            } else {
+                dependencyCount = 1;
             }
+
+            VkSubpassDependency.Buffer subpassDependencies = VkSubpassDependency.calloc(dependencyCount, stack);
+
+            int srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            int dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            int srcAccessMask = 0;
+            int dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+            if (depthAttachmentInfo != null) {
+                srcStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                dstStageMask |= VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+                srcAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+                dstAccessMask |= VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            }
+
+            subpassDependencies.get(0)
+                               .srcSubpass(VK_SUBPASS_EXTERNAL)
+                               .dstSubpass(0)
+                               .srcStageMask(srcStageMask)
+                               .dstStageMask(dstStageMask)
+                               .srcAccessMask(srcAccessMask)
+                               .dstAccessMask(dstAccessMask);
+
+            if (dependencyCount == 2) {
+                subpassDependencies.get(1)
+                                   .srcSubpass(0)
+                                   .dstSubpass(VK_SUBPASS_EXTERNAL)
+                                   .srcStageMask(VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT)
+                                   .dstStageMask(VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT)
+                                   .srcAccessMask(VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT)
+                                   .dstAccessMask(VK_ACCESS_SHADER_READ_BIT);
+            }
+
+            renderPassInfo.pDependencies(subpassDependencies);
 
             LongBuffer pRenderPass = stack.mallocLong(1);
 
@@ -289,7 +304,7 @@ public class RenderPass {
             this.format = format;
             this.finalLayout = type.defaultLayout;
 
-            this.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+            this.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
             this.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
         }
 
@@ -337,10 +352,11 @@ public class RenderPass {
             this.framebuffer = framebuffer;
 
             if (framebuffer.hasColorAttachment)
-                colorAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.COLOR, framebuffer.format).setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+                colorAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.COLOR, framebuffer.format).setOps(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
             // Mobile fix: Use STORE instead of DONT_CARE for depth to ensure proper synchronization
+            // Also use LOAD instead of CLEAR to prevent UI and world blocks disappearing on Mali GPUs
             if (framebuffer.hasDepthAttachment)
-                depthAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.DEPTH, framebuffer.depthFormat).setOps(VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE);
+                depthAttachmentInfo = new AttachmentInfo(AttachmentInfo.Type.DEPTH, framebuffer.depthFormat).setOps(VK_ATTACHMENT_LOAD_OP_LOAD, VK_ATTACHMENT_STORE_OP_STORE);
         }
 
         public RenderPass build() {
